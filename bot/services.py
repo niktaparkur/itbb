@@ -71,13 +71,12 @@ class SearchService:
             return "✅ **Организация проверена.**"
 
     async def check_url(self, url: str) -> str:
-        logger.info(f"Запускаю скрапер для проверки URL: {url}")
+        logger.info(f"Запускаю скрапер для проверки URL по blocklist.rkn.gov.ru: {url}")
         try:
             with UniversalScraper(capguru_api_key=settings.CAPGURU_API_KEY) as scraper:
                 blocklist_result = await asyncio.to_thread(
                     scraper.check_rkn_blocklist, url
                 )
-                fz530_result = await asyncio.to_thread(scraper.check_rkn_530fz, url)
 
         except CaptchaServiceError as e:
             logger.error(
@@ -88,16 +87,12 @@ class SearchService:
         blocklist_found = (
             "не найден" not in blocklist_result.get("статус", "не найден").lower()
         )
-        fz530_found = (
-            "ничего не найдено"
-            not in fz530_result.get("статус", "ничего не найдено").lower()
-        )
 
-        if blocklist_found or fz530_found:
-            logger.info(f"Вердикт по URL '{url}': ОГРАНИЧЕН.")
+        if blocklist_found:
+            logger.info(f"Вердикт по URL '{url}': ОГРАНИЧЕН (найден в blocklist).")
             return "❗️ **Доступ к сайту ограничен по решению суда.**"
         else:
-            logger.info(f"Вердикт по URL '{url}': РАЗРЕШЕН.")
+            logger.info(f"Вердикт по URL '{url}': РАЗРЕШЕН (не найден в blocklist).")
             return "✅ **Ресурс разрешен.**"
 
 
