@@ -15,9 +15,10 @@ from bot.handlers import common, profile, search
 from db.repository import UserRepo, CacheRepo
 from bot.services import UserService, SearchService, run_scrapers_and_update_cache
 from bot.logging_config import LOGGING_CONFIG
+from aiogram.types import BotCommand, BotCommandScopeDefault
 
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+if not os.path.exists("logs"):
+    os.makedirs("logs")
 dictConfig(LOGGING_CONFIG)
 
 
@@ -32,6 +33,17 @@ class DIMiddleware:
             data["user_service"] = UserService(data["user_repo"])
             data["search_service"] = SearchService(data["cache_repo"])
             return await handler(event, data)
+
+
+async def set_main_menu(bot: Bot):
+    main_menu_commands = [
+        BotCommand(command="/start", description="🚀 Перезапустить бота"),
+        BotCommand(command="/check", description="🔍 Начать новую проверку"),
+        BotCommand(command="/profile", description="👤 Мой профиль и подписка"),
+    ]
+
+    # Устанавливаем команды для всех пользователей
+    await bot.set_my_commands(main_menu_commands, BotCommandScopeDefault())
 
 
 async def main():
@@ -60,6 +72,7 @@ async def main():
         id="update_cache_job",
         replace_existing=True,
     )
+    await set_main_menu(bot)
     logging.info("Starting initial data scraping...")
     await run_scrapers_and_update_cache()
     logging.info("Initial scraping finished.")

@@ -31,6 +31,19 @@ class UserRepo(BaseRepo):
             await self.session.refresh(user)
         return user
 
+    async def add_credits(self, telegram_id: int, amount: int = 1):
+        user = await self.get_or_create_user(telegram_id, None)
+        user.single_check_credits += amount
+        await self.session.commit()
+
+    async def spend_credit(self, telegram_id: int):
+        user = await self.get_or_create_user(telegram_id, None)
+        if user.single_check_credits > 0:
+            user.single_check_credits -= 1
+            await self.session.commit()
+            return True
+        return False
+
 
 class CacheRepo:
     def __init__(self, session: AsyncSession):

@@ -19,6 +19,10 @@ logging.basicConfig(
 )
 
 
+class CaptchaServiceError(Exception):
+    pass
+
+
 class UniversalScraper:
     _CAPGURU_IN_URL = "https://api.cap.guru/in.php"
     _CAPGURU_RES_URL = "https://api.cap.guru/res.php"
@@ -59,10 +63,11 @@ class UniversalScraper:
         options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         )
-
         try:
             service = ChromeService()
             driver = webdriver.Chrome(service=service, options=options)
+            driver.set_page_load_timeout(40)
+            driver.implicitly_wait(10)
             self.logger.info("Драйвер Chrome успешно инициализирован.")
             return driver
         except Exception as e:
@@ -71,21 +76,25 @@ class UniversalScraper:
             )
             raise
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     @staticmethod
     def _parse_minjust(html_content: str) -> list[dict]:
+        # ... (этот метод остается без изменений)
         soup = BeautifulSoup(html_content, "html.parser")
         table = soup.find("table")
         if not table:
             return []
-
         data = []
         for row in table.find("tbody").find_all("tr"):
             cells = [td.get_text(strip=True) for td in row.find_all("td")]
             if len(cells) > 1:
                 name = cells[1]
-                details_parts = []
-                if cells[0]:
-                    details_parts.append(f"Номер: {cells[0]}")
+                details_parts = [f"Номер: {cells[0]}"] if cells[0] else []
                 if len(cells) > 2 and cells[2]:
                     details_parts.append(f"Адрес: {cells[2]}")
                 if len(cells) > 3 and cells[3]:
@@ -94,23 +103,22 @@ class UniversalScraper:
                     details_parts.append(f"ИНН: {cells[4]}")
                 if len(cells) > 5 and cells[5]:
                     details_parts.append(f"Решение: {cells[5]}")
-
-                details_str = " | ".join(details_parts)
-                data.append({"name": name, "details": details_str})
+                data.append({"name": name, "details": " | ".join(details_parts)})
         return data
 
     @staticmethod
     def _parse_fedfsm(html_content: str) -> list[dict]:
         all_entries = []
         soup = BeautifulSoup(html_content, "html.parser")
-
         org_container = soup.find("div", id="russianUL")
         if org_container:
             for item in org_container.find_all("li"):
-                text = item.get_text(strip=True)
-                name_part = re.sub(r"^\d+\.\s*", "", text)
-                all_entries.append({"name": name_part, "details": "Тип: Организация"})
-
+                all_entries.append(
+                    {
+                        "name": re.sub(r"^\d+\.\s*", "", item.get_text(strip=True)),
+                        "details": "Тип: Организация",
+                    }
+                )
         ind_container = soup.find("div", id="russianFL")
         if ind_container:
             pattern = re.compile(r"^\d+\.\s*(.*?),\s*([\d\.]+\s*г\.р\.)\s*(.*);?$")
@@ -118,9 +126,12 @@ class UniversalScraper:
                 text = item.get_text(strip=True).replace("\n", " ")
                 match = pattern.search(text)
                 if match:
-                    fio = match.group(1).strip()
-                    details = f"Тип: Физ. лицо | ДР: {match.group(2).strip()} | Место рождения: {match.group(3).strip(';')}"
-                    all_entries.append({"name": fio, "details": details})
+                    all_entries.append(
+                        {
+                            "name": match.group(1).strip(),
+                            "details": f"Тип: Физ. лицо | ДР: {match.group(2).strip()} | Место рождения: {match.group(3).strip(';')}",
+                        }
+                    )
         return all_entries
 
     @staticmethod
@@ -137,35 +148,10 @@ class UniversalScraper:
                 court_info = " ".join(
                     div.get_text(strip=True) for div in cells[2].find_all("div")
                 )
-                court_info_cleaned = re.sub(r"\s+", " ", court_info).strip()
-                organizations_list.append({"name": name, "details": court_info_cleaned})
+                organizations_list.append(
+                    {"name": name, "details": re.sub(r"\s+", " ", court_info).strip()}
+                )
         return organizations_list
-
-    @staticmethod
-    def _parse_rkn_530fz_result(soup: BeautifulSoup) -> dict:
-        result_div = soup.find("div", id="resultDiv")
-        if not result_div:
-            return {
-                "статус": "Не удалось найти блок результатов ('resultDiv') на странице.",
-                "детали": [],
-            }
-        summary_p = result_div.find("p")
-        summary = (
-            summary_p.get_text(strip=True)
-            if summary_p
-            else result_div.get_text(strip=True)
-        )
-        details = []
-        table = result_div.find("table", class_="TblGrid")
-        if table:
-            headers = [
-                th.get_text(strip=True) for th in table.find("thead").find_all("th")
-            ]
-            for row in table.find("tbody").find_all("tr"):
-                cells = [td.get_text(strip=True) for td in row.find_all("td")]
-                if len(cells) == len(headers):
-                    details.append(dict(zip(headers, cells)))
-        return {"статус": summary, "детали": details}
 
     @staticmethod
     def _parse_rkn_blocklist_result(soup: BeautifulSoup) -> dict:
@@ -175,7 +161,6 @@ class UniversalScraper:
                 "статус": "Ресурс не найден в реестре (отсутствует 'searchresurs')."
             }
         summary = search_res.get_text(strip=True)
-
         restrictions = []
         table = soup.find("table", id="tbl_search")
         if table:
@@ -198,31 +183,45 @@ class UniversalScraper:
     def _solve_captcha(self, vernet_param: int):
         try:
             wait = WebDriverWait(self.driver, 20)
-            captcha_image_element = wait.until(
-                EC.visibility_of_element_located((By.ID, "captcha_image"))
-            )
-            image_base64 = captcha_image_element.screenshot_as_base64
-            self.logger.info("Изображение капчи получено. Отправка в сервис решения...")
-
-            payload = {
-                "key": self.capguru_api_key,
-                "method": "base64",
-                "body": image_base64,
-                "json": 1,
-            }
-            response = requests.post(self._CAPGURU_IN_URL, data=payload, timeout=30)
-            response_data = response.json()
-
-            if response_data.get("status") != 1:
-                self.logger.error(
-                    "Ошибка при отправке капчи: %s", response_data.get("request")
+            try:
+                captcha_image_element = wait.until(
+                    EC.visibility_of_element_located((By.ID, "captcha_image"))
+                )
+            except Exception:
+                self.logger.warning(
+                    "Не удалось найти элемент 'captcha_image' на странице."
                 )
                 return None
-
+            image_base64 = captcha_image_element.screenshot_as_base64
+            self.logger.info("Изображение капчи получено. Отправка в сервис решения...")
+            try:
+                payload = {
+                    "key": self.capguru_api_key,
+                    "method": "base64",
+                    "body": image_base64,
+                    "json": 1,
+                }
+                response = requests.post(self._CAPGURU_IN_URL, data=payload, timeout=30)
+                response.raise_for_status()
+                response_data = response.json()
+            except requests.exceptions.RequestException as e:
+                self.logger.error(
+                    "Сервис решения капчи недоступен (ошибка сети): %s", e
+                )
+                raise CaptchaServiceError(
+                    "Сервис решения капчи временно недоступен (ошибка сети)."
+                )
+            if response_data.get("status") != 1:
+                error_text = response_data.get("request", "Неизвестная ошибка API")
+                self.logger.error("API сервиса капчи вернуло ошибку: %s", error_text)
+                if "ERROR_ZERO_BALANCE" in error_text:
+                    raise CaptchaServiceError(
+                        "Закончились средства на балансе сервиса решения капчи."
+                    )
+                raise CaptchaServiceError(f"Ошибка сервиса капчи: {error_text}")
             captcha_id = response_data.get("request")
             self.logger.info("Капча успешно отправлена. ID задачи: %s", captcha_id)
             time.sleep(10)
-
             for _ in range(20):
                 params = {
                     "key": self.capguru_api_key,
@@ -235,7 +234,6 @@ class UniversalScraper:
                     self._CAPGURU_RES_URL, params=params, timeout=30
                 )
                 result_data = result_response.json()
-
                 if result_data.get("status") == 1:
                     solution = result_data.get("request")
                     self.logger.info("Капча решена. Ответ: %s", solution)
@@ -244,116 +242,30 @@ class UniversalScraper:
                     self.logger.info("Капча еще не готова, ждем 5 секунд...")
                     time.sleep(5)
                 else:
-                    self.logger.error(
-                        "Ошибка при получении решения: %s", result_data.get("request")
+                    error_text = result_data.get(
+                        "request", "Неизвестная ошибка получения результата"
                     )
-                    return None
-
+                    self.logger.error(
+                        "Ошибка при получении решения капчи: %s", error_text
+                    )
+                    if "ERROR_CAPTCHA_UNSOLVABLE" in error_text:
+                        raise CaptchaServiceError(
+                            "Капча не может быть решена. Возможно, она слишком сложная."
+                        )
+                    raise CaptchaServiceError(f"Ошибка сервиса капчи: {error_text}")
             self.logger.warning(
                 "Не удалось получить решение капчи за отведенное время."
             )
             return None
+        except CaptchaServiceError:
+            raise
         except Exception as e:
             self.logger.error(
-                "Произошла ошибка при работе с капчей: %s", e, exc_info=True
+                "Произошла непредвиденная ошибка при работе с капчей: %s",
+                e,
+                exc_info=True,
             )
             return None
-
-    def _perform_rkn_check(
-        self,
-        site_url: str,
-        url_to_check: str,
-        captcha_input_id: str,
-        url_input_selector: tuple,
-        submit_button_id: str,
-        captcha_vernet: int,
-        result_parser_func,
-    ):
-        self.logger.info(
-            "--- Начинаю проверку '%s' на сайте %s ---", url_to_check, site_url
-        )
-        max_retries = 10
-        for attempt in range(max_retries):
-            try:
-                self.driver.get(site_url)
-                time.sleep(1)
-
-                captcha_solution = self._solve_captcha(vernet_param=captcha_vernet)
-                if not captcha_solution:
-                    self.logger.warning(
-                        "Не удалось решить капчу (попытка %d/%d).",
-                        attempt + 1,
-                        max_retries,
-                    )
-                    time.sleep(10)
-                    continue
-
-                self.driver.find_element(By.ID, captcha_input_id).send_keys(
-                    captcha_solution
-                )
-                self.driver.find_element(*url_input_selector).send_keys(url_to_check)
-                self.driver.find_element(By.ID, submit_button_id).click()
-                self.logger.info("Данные для проверки '%s' отправлены.", url_to_check)
-                time.sleep(5)
-
-                soup = BeautifulSoup(self.driver.page_source, "html.parser")
-
-                modal_div = soup.find("div", id="divMsgModal")
-
-                if modal_div and "display: block" in modal_div.get("style", ""):
-                    error_text_element = modal_div.find("p", id="divMsgModalText")
-                    error_text = (
-                        error_text_element.get_text(strip=True).lower()
-                        if error_text_element
-                        else ""
-                    )
-
-                    if "неверно указан защитный код" in error_text:
-                        self.logger.warning(
-                            "Ошибка: неверно указан защитный код (попытка %d/%d).",
-                            attempt + 1,
-                            max_retries,
-                        )
-                        continue
-
-                    elif "по вашему запросу ничего не найдено" in error_text:
-                        self.logger.info(
-                            "По запросу '%s' ничего не найдено.", url_to_check
-                        )
-                        return {
-                            "статус": "По вашему запросу ничего не найдено",
-                            "детали": [],
-                        }
-
-                    else:
-                        self.logger.warning(
-                            "Обнаружено неизвестное сообщение в модальном окне: '%s'",
-                            error_text,
-                        )
-
-                parsed_result = result_parser_func(soup)
-                self.logger.info("Проверка '%s' завершена.", url_to_check)
-                return parsed_result
-
-            except Exception as e:
-                self.logger.error(
-                    "Критическая ошибка при проверке РКН (попытка %d/%d): %s",
-                    attempt + 1,
-                    max_retries,
-                    e,
-                    exc_info=True,
-                )
-                time.sleep(5)
-
-        self.logger.error(
-            "Не удалось выполнить проверку для '%s' после %d попыток.",
-            url_to_check,
-            max_retries,
-        )
-        return {
-            "статус": f"Критическая ошибка: не удалось выполнить проверку для '{url_to_check}' после {max_retries} попыток.",
-            "детали": [],
-        }
 
     def _click_element_robustly(self, wait, actions, selector_type, selector_value):
         element = wait.until(
@@ -372,7 +284,6 @@ class UniversalScraper:
             self.driver.get(url)
             wait = WebDriverWait(self.driver, 60)
             actions = ActionChains(self.driver)
-
             if target_name == "fedfsm":
                 self.logger.info("Выполняю последовательность кликов для fedsfm.ru...")
                 try:
@@ -403,13 +314,10 @@ class UniversalScraper:
                         click_error,
                         exc_info=True,
                     )
-                    screenshot_path = f"fedsfm_error_{int(time.time())}.png"
-                    self.driver.save_screenshot(screenshot_path)
-                    self.logger.info("Скриншот ошибки сохранен как %s", screenshot_path)
+                    self.driver.save_screenshot(f"fedsfm_error_{int(time.time())}.png")
                     return None
             else:
                 wait.until(EC.visibility_of_element_located(wait_for))
-
             return self.driver.page_source
         except Exception as e:
             self.logger.error(
@@ -420,29 +328,22 @@ class UniversalScraper:
     def run_registry_scrapers(self) -> dict[str, list]:
         self.logger.info("=== ЗАПУСК СКРАПИНГА РЕЕСТРОВ ===")
         all_data = {}
-        target_items = list(self._REGISTRY_TARGETS.items())
-        for i, (name, config) in enumerate(target_items):
+        for i, (name, config) in enumerate(list(self._REGISTRY_TARGETS.items())):
             self.logger.info("--- Начинаю обработку: %s (%s) ---", name, config["url"])
             html_content = self._get_page_content(
                 name, config["url"], config["wait_for"]
             )
-
             if not html_content:
                 self.logger.warning("Не удалось получить контент для %s.", name)
                 all_data[name] = []
                 continue
-
-            parser_method = getattr(self, config["parser_method"])
-            parsed_data = parser_method(html_content)
+            parsed_data = getattr(self, config["parser_method"])(html_content)
             all_data[name] = parsed_data
             self.logger.info(
                 "Парсинг %s завершен. Найдено записей: %d", name, len(parsed_data)
             )
-
-            if i < len(target_items) - 1:
-                self.logger.info("Пауза 2 секунд перед следующим сайтом...")
+            if i < len(self._REGISTRY_TARGETS) - 1:
                 time.sleep(2)
-
         self.logger.info("=== СКРАПИНГ РЕЕСТРОВ ЗАВЕРШЕН ===")
         return all_data
 
@@ -451,12 +352,11 @@ class UniversalScraper:
         self.logger.info(
             "--- Начинаю проверку '%s' на сайте %s ---", domain_to_check, site_url
         )
-        max_retries = 10
+        max_retries = 15
         for attempt in range(max_retries):
             try:
                 self.driver.get(site_url)
                 time.sleep(1)
-
                 captcha_solution = self._solve_captcha(vernet_param=2)
                 if not captcha_solution:
                     self.logger.warning(
@@ -465,7 +365,6 @@ class UniversalScraper:
                         max_retries,
                     )
                     continue
-
                 self.driver.find_element(By.ID, "captcha").send_keys(captcha_solution)
                 self.driver.find_element(By.ID, "inputMsg").send_keys(domain_to_check)
                 self.driver.find_element(By.ID, "send_but2").click()
@@ -473,9 +372,7 @@ class UniversalScraper:
                     "Данные для проверки '%s' отправлены.", domain_to_check
                 )
                 time.sleep(5)
-
                 soup = BeautifulSoup(self.driver.page_source, "html.parser")
-
                 error_div = soup.find("div", id="error")
                 if (
                     error_div
@@ -488,9 +385,7 @@ class UniversalScraper:
                         max_retries,
                     )
                     continue
-
                 return self._parse_rkn_blocklist_result(soup)
-
             except Exception as e:
                 self.logger.error(
                     "Критическая ошибка при проверке blocklist (попытка %d/%d): %s",
@@ -500,21 +395,9 @@ class UniversalScraper:
                     exc_info=True,
                 )
                 time.sleep(5)
-
         return {
             "статус": f"Критическая ошибка: не удалось выполнить проверку для '{domain_to_check}' после {max_retries} попыток."
         }
-
-    def check_rkn_530fz(self, domain_to_check: str) -> dict:
-        return self._perform_rkn_check(
-            site_url="https://530-fz.rkn.gov.ru/",
-            url_to_check=domain_to_check,
-            captcha_input_id="captcha",
-            url_input_selector=(By.CLASS_NAME, "inputMsg"),
-            submit_button_id="send_but2",
-            captcha_vernet=17,
-            result_parser_func=self._parse_rkn_530fz_result,
-        )
 
     def close(self):
         if self.driver:

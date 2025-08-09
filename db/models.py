@@ -7,6 +7,7 @@ from sqlalchemy import (
     Text,
     func,
     Index,
+    Integer,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -23,6 +24,9 @@ class User(Base):
     subscription_expires_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     last_url_check_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
+    single_check_credits: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
 
 class Payment(Base):

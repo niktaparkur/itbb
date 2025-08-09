@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import logging
 
 from db.repository import UserRepo, CacheRepo
-from scraper_tool.scraper import UniversalScraper
+from scraper_tool.scraper import UniversalScraper, CaptchaServiceError
 from bot.config import settings
 from bot.normalizer import normalize_for_search
 
@@ -46,6 +46,16 @@ class UserService:
         user.subscription_expires_at = start_date + timedelta(days=30)
         await self.repo.session.commit()
 
+    async def get_credits(self, telegram_id: int) -> int:
+        user = await self.repo.get_or_create_user(telegram_id, None)
+        return user.single_check_credits
+
+    async def add_credit(self, telegram_id: int):
+        await self.repo.add_credits(telegram_id, 1)
+
+    async def spend_credit(self, telegram_id: int):
+        await self.repo.spend_credit(telegram_id)
+
 
 class SearchService:
     def __init__(self, cache_repo: CacheRepo):
@@ -62,12 +72,18 @@ class SearchService:
 
     async def check_url(self, url: str) -> str:
         logger.info(f"Запускаю скрапер для проверки URL: {url}")
-        scraper = UniversalScraper(capguru_api_key=settings.CAPGURU_API_KEY)
         try:
-            blocklist_result = await asyncio.to_thread(scraper.check_rkn_blocklist, url)
-            fz530_result = await asyncio.to_thread(scraper.check_rkn_530fz, url)
-        finally:
-            await asyncio.to_thread(scraper.close)
+            with UniversalScraper(capguru_api_key=settings.CAPGURU_API_KEY) as scraper:
+                blocklist_result = await asyncio.to_thread(
+                    scraper.check_rkn_blocklist, url
+                )
+                fz530_result = await asyncio.to_thread(scraper.check_rkn_530fz, url)
+
+        except CaptchaServiceError as e:
+            logger.error(
+                f"Проверка URL '{url}' не удалась из-за сбоя сервиса капчи: {e}"
+            )
+            return "CAPTCHA_SERVICE_FAILED"
 
         blocklist_found = (
             "не найден" not in blocklist_result.get("статус", "не найден").lower()
@@ -94,7 +110,10 @@ async def run_scrapers_and_update_cache():
             all_data = await asyncio.to_thread(scraper.run_registry_scrapers)
         logger.info("Скрапинг завершен, получены данные по всем реестрам.")
     except Exception as e:
-        logger.error(f"Произошла КРИТИЧЕСКАЯ ошибка на этапе скрапинга, обновление прервано: {e}", exc_info=True)
+        logger.error(
+            f"Произошла КРИТИЧЕСКАЯ ошибка на этапе скрапинга, обновление прервано: {e}",
+            exc_info=True,
+        )
         return
 
     async with async_session_factory() as session:
@@ -105,41 +124,68 @@ async def run_scrapers_and_update_cache():
             if minjust_data:
                 minjust_to_save = [
                     {
-                        "source_type": "minjust", "name": item["name"], "details": item["details"],
-                        "search_vector": normalize_for_search(item["name"], item["details"])
-                    } for item in minjust_data
+                        "source_type": "minjust",
+                        "name": item["name"],
+                        "details": item["details"],
+                        "search_vector": normalize_for_search(
+                            item["name"], item["details"]
+                        ),
+                    }
+                    for item in minjust_data
                 ]
                 await cache_repo.update_cache("minjust", minjust_to_save)
-                logger.info(f"Источник 'minjust' успешно обновлен ({len(minjust_to_save)} записей).")
+                logger.info(
+                    f"Источник 'minjust' успешно обновлен ({len(minjust_to_save)} записей)."
+                )
         except Exception as e:
-            logger.error(f"Ошибка при обновлении источника 'minjust': {e}", exc_info=True)
+            logger.error(
+                f"Ошибка при обновлении источника 'minjust': {e}", exc_info=True
+            )
 
         try:
             fedsfm_data = all_data.get("fedfsm", [])
             if fedsfm_data:
                 fedsfm_to_save = [
                     {
-                        "source_type": "fedsfm", "name": item["name"], "details": item["details"],
-                        "search_vector": normalize_for_search(item["name"], item["details"])
-                    } for item in fedsfm_data
+                        "source_type": "fedsfm",
+                        "name": item["name"],
+                        "details": item["details"],
+                        "search_vector": normalize_for_search(
+                            item["name"], item["details"]
+                        ),
+                    }
+                    for item in fedsfm_data
                 ]
                 await cache_repo.update_cache("fedsfm", fedsfm_to_save)
-                logger.info(f"Источник 'fedsfm' успешно обновлен ({len(fedsfm_to_save)} записей).")
+                logger.info(
+                    f"Источник 'fedsfm' успешно обновлен ({len(fedsfm_to_save)} записей)."
+                )
         except Exception as e:
-            logger.error(f"Ошибка при обновлении источника 'fedsfm': {e}", exc_info=True)
+            logger.error(
+                f"Ошибка при обновлении источника 'fedsfm': {e}", exc_info=True
+            )
 
         try:
             fsb_data = all_data.get("fsb", [])
             if fsb_data:
                 fsb_to_save = [
                     {
-                        "source_type": "fsb", "name": item["name"], "details": item["details"],
-                        "search_vector": normalize_for_search(item["name"], item["details"])
-                    } for item in fsb_data
+                        "source_type": "fsb",
+                        "name": item["name"],
+                        "details": item["details"],
+                        "search_vector": normalize_for_search(
+                            item["name"], item["details"]
+                        ),
+                    }
+                    for item in fsb_data
                 ]
                 await cache_repo.update_cache("fsb", fsb_to_save)
-                logger.info(f"Источник 'fsb' успешно обновлен ({len(fsb_to_save)} записей).")
+                logger.info(
+                    f"Источник 'fsb' успешно обновлен ({len(fsb_to_save)} записей)."
+                )
         except Exception as e:
             logger.error(f"Ошибка при обновлении источника 'fsb': {e}", exc_info=True)
 
-    logger.info(f"[{datetime.now()}] ЗАВЕРШЕНИЕ: Плановое обновление кэша реестров завершено.")
+    logger.info(
+        f"[{datetime.now()}] ЗАВЕРШЕНИЕ: Плановое обновление кэша реестров завершено."
+    )
