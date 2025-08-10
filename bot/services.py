@@ -62,10 +62,10 @@ class SearchService:
         self.repo = cache_repo
 
     async def get_entity_verdict(self, query: str) -> str:
-        logger.info(f"Выполняю поиск для вынесения вердикта по запросу: '{query}'")
-        match = await self.repo.find_first_match(query)
+        logger.info(f"Выполняю FTS поиск для вынесения вердикта по запросу: '{query}'")
+        found = await self.repo.find_first_match(query)
 
-        if match:
+        if found:
             return "❗️ **Организация признана нежелательной / экстремистской / террористической.**"
         else:
             return "✅ **Организация проверена.**"
