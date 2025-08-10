@@ -1,6 +1,6 @@
 import re
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, text, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Base, User, SearchableItem
 
@@ -60,18 +60,28 @@ class CacheRepo:
             )
         await self.session.commit()
 
-    async def find_first_match(self, query: str) -> SearchableItem | None:
+    async def find_first_match(self, query: str) -> bool:
         clean_query = (
             re.sub(r'[\s,;*"\n«»]+', " ", query).strip().lower().replace("ё", "е")
         )
         if not clean_query:
-            return None
+            return False
+
+        query_words = clean_query.split()
+
+        strict_query = " ".join([f"+{word}*" for word in query_words])
 
         stmt = (
-            select(SearchableItem)
-            .where(SearchableItem.search_vector.like(f"%{clean_query}%"))
-            .limit(1)
+            select(func.count())
+            .select_from(SearchableItem)
+            .where(
+                SearchableItem.search_vector.match(
+                    strict_query, mysql_mode="IN BOOLEAN MODE"
+                )
+            )
         )
 
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        count = result.scalar_one()
+
+        return count > 0
