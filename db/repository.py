@@ -1,6 +1,6 @@
 import re
 
-from sqlalchemy import select, delete, func, text, case
+from sqlalchemy import select, delete, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Base, User, SearchableItem
 
@@ -69,19 +69,13 @@ class CacheRepo:
 
         query_words = clean_query.split()
 
-        strict_query = " ".join([f"+{word}*" for word in query_words])
+        conditions = [
+            SearchableItem.search_vector.like(f"%{word}%") for word in query_words
+        ]
 
-        stmt = (
-            select(func.count())
-            .select_from(SearchableItem)
-            .where(
-                SearchableItem.search_vector.match(
-                    strict_query, mysql_mode="IN BOOLEAN MODE"
-                )
-            )
-        )
+        stmt = select(SearchableItem).where(and_(*conditions)).limit(1)
 
         result = await self.session.execute(stmt)
-        count = result.scalar_one()
+        match = result.scalar_one_or_none()
 
-        return count > 0
+        return match is not None
