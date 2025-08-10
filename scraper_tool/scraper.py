@@ -84,26 +84,47 @@ class UniversalScraper:
 
     @staticmethod
     def _parse_minjust(html_content: str) -> list[dict]:
-        # ... (этот метод остается без изменений)
         soup = BeautifulSoup(html_content, "html.parser")
         table = soup.find("table")
         if not table:
             return []
+
         data = []
-        for row in table.find("tbody").find_all("tr"):
-            cells = [td.get_text(strip=True) for td in row.find_all("td")]
-            if len(cells) > 1:
-                name = cells[1]
-                details_parts = [f"Номер: {cells[0]}"] if cells[0] else []
-                if len(cells) > 2 and cells[2]:
-                    details_parts.append(f"Адрес: {cells[2]}")
-                if len(cells) > 3 and cells[3]:
-                    details_parts.append(f"ОГРН: {cells[3]}")
-                if len(cells) > 4 and cells[4]:
-                    details_parts.append(f"ИНН: {cells[4]}")
-                if len(cells) > 5 and cells[5]:
-                    details_parts.append(f"Решение: {cells[5]}")
-                data.append({"name": name, "details": " | ".join(details_parts)})
+        for row in table.find_all("tr"):
+            cells = row.find_all("td")
+
+            if len(cells) < 4:
+                continue
+
+            header_cells = row.find_all("th")
+            if (
+                len(header_cells) > 3
+                and "Полное и сокращенное" in header_cells[3].get_text()
+            ):
+                continue
+
+            name = cells[3].get_text(strip=True)
+
+            if not name:
+                continue
+
+            details_parts = []
+            if cells[0].get_text(strip=True):
+                details_parts.append(
+                    f"Номер в перечне: {cells[0].get_text(strip=True)}"
+                )
+            if cells[1].get_text(strip=True):
+                details_parts.append(
+                    f"Распоряжение Минюста: {cells[1].get_text(strip=True)}"
+                )
+            if cells[2].get_text(strip=True):
+                details_parts.append(
+                    f"Решение Генпрокуратуры: {cells[2].get_text(strip=True)}"
+                )
+
+            details_str = " | ".join(details_parts)
+            data.append({"name": name, "details": details_str})
+
         return data
 
     @staticmethod
