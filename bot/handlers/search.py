@@ -8,6 +8,7 @@ from bot.services import UserService, SearchService
 from bot.config import settings
 from bot.utils import normalize_url_for_search
 
+
 router = Router()
 
 
@@ -20,12 +21,14 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
-        need_email=True,
-
     )
 
 
 async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
+    print(user_id)
+    print(payload)
+    print(settings.PAYMENT_PROVIDER_TOKEN)
+    print(bot)
     await bot.send_invoice(
         chat_id=user_id,
         title="Разовая проверка",
@@ -34,7 +37,6 @@ async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Разовая проверка", amount=200 * 100)],
-        need_email=True,
     )
 
 
