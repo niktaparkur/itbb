@@ -21,6 +21,7 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         currency="RUB",
         prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
         need_email=True,
+
     )
 
 
