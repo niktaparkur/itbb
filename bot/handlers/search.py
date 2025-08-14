@@ -32,6 +32,7 @@ async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Разовая проверка", amount=200 * 100)],
+        need_email=True,
     )
 
 
