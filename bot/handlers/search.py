@@ -7,7 +7,15 @@ from bot.keyboards import get_payment_kb
 from bot.services import UserService, SearchService
 from bot.config import settings
 from bot.utils import normalize_url_for_search
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -25,10 +33,10 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
 
 
 async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
-    print(user_id)
-    print(payload)
-    print(settings.PAYMENT_PROVIDER_TOKEN)
-    print(bot)
+    logger.info(user_id)
+    logger.info(payload)
+    logger.info(settings.PAYMENT_PROVIDER_TOKEN)
+    logger.info(bot)
     await bot.send_invoice(
         chat_id=user_id,
         title="Разовая проверка",
