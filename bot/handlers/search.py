@@ -20,6 +20,7 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
+        need_email=True,
     )
 
 
