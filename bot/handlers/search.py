@@ -1,3 +1,5 @@
+import json
+
 from aiogram import Router, F, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, LabeledPrice, PreCheckoutQuery
@@ -35,6 +37,22 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
 
 
 async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
+    provider_data = {
+        "receipt": {
+            "items": [
+                {
+                    "description": "Разовая проверка",
+                    "quantity": "1.00",
+                    "amount": {"value": "100.00", "currency": "RUB"},
+                    "vat_code": 1,
+                    "payment_mode": "full_payment",
+                    "payment_subject": "service",
+                }
+            ],
+            "tax_system_code": 1,
+        }
+    }
+
     await bot.send_invoice(
         chat_id=user_id,
         title="Разовая проверка",
@@ -45,6 +63,7 @@ async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
         prices=[LabeledPrice(label="Разовая проверка", amount=100 * 100)],
         need_email=True,
         send_email_to_provider=True,
+        provider_data=json.dumps(provider_data),
     )
 
 
