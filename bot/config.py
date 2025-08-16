@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str
     PAYMENT_PROVIDER_TOKEN: str
+    ADMIN_ID: int
 
     # Scraper
     CAPGURU_API_KEY: str

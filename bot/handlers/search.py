@@ -27,7 +27,7 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         "receipt": {
             "items": [
                 {
-                    "description": "Подписка на 30 дней",
+                    "description": "Подписка на 1 год",
                     "quantity": "1.00",
                     "amount": {"value": "1900.00", "currency": "RUB"},
                     "vat_code": 1,
@@ -41,12 +41,12 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
 
     await bot.send_invoice(
         chat_id=user_id,
-        title="Подписка на 30 дней",
-        description="Полный доступ ко всем функциям It_brother_bot на 30 дней.",
+        title="Подписка на 1 год",
+        description="Полный доступ ко всем функциям It_brother_bot на 365 дней.",
         payload="subscription_payload",
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
-        prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
+        prices=[LabeledPrice(label="Подписка на 1 год", amount=1900 * 100)],
         need_email=True,
         send_email_to_provider=True,
         provider_data=json.dumps(provider_data),

@@ -43,8 +43,20 @@ class UserService:
             if user.subscription_expires_at and user.subscription_expires_at > now
             else now
         )
-        user.subscription_expires_at = start_date + timedelta(days=30)
+        user.subscription_expires_at = start_date + timedelta(days=365)
         await self.repo.session.commit()
+
+    async def revoke_subscription(self, telegram_id: int) -> bool:
+        user = await self.repo.get_user_by_telegram_id(telegram_id)
+        if user and user.subscription_expires_at:
+            user.subscription_expires_at = None
+            await self.repo.session.commit()
+            logger.info(f"Подписка для пользователя {telegram_id} была отозвана.")
+            return True
+        logger.warning(
+            f"Попытка отозвать несуществующую подписку у пользователя {telegram_id}."
+        )
+        return False
 
     async def get_credits(self, telegram_id: int) -> int:
         user = await self.repo.get_or_create_user(telegram_id, None)

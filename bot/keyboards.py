@@ -25,7 +25,7 @@ profile_kb = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="⭐ Купить/Продлить подписку (1900 RUB)",
+                text="⭐ Купить/Продлить подписку (1900 RUB/год)",
                 callback_data="buy_subscription",
             )
         ]
@@ -44,7 +44,7 @@ def get_payment_kb(payload_prefix: str) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="⭐ Оформить подписку (1900 RUB)",
+                    text="⭐ Оформить подписку (1900 RUB/год)",
                     callback_data="buy_subscription",
                 )
             ],

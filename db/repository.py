@@ -19,10 +19,13 @@ class UserRepo(BaseRepo):
     def __init__(self, session: AsyncSession):
         super().__init__(session, User)
 
-    async def get_or_create_user(self, telegram_id: int, username: str | None) -> User:
+    async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
         query = select(User).where(User.telegram_id == telegram_id)
         result = await self.session.execute(query)
-        user = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+
+    async def get_or_create_user(self, telegram_id: int, username: str | None) -> User:
+        user = await self.get_user_by_telegram_id(telegram_id)
 
         if user is None:
             user = User(telegram_id=telegram_id, username=username)

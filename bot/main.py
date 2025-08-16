@@ -11,7 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 from bot.config import settings
-from bot.handlers import common, profile, search
+from bot.handlers import common, profile, search, admin
 from db.repository import UserRepo, CacheRepo
 from bot.services import UserService, SearchService, run_scrapers_and_update_cache
 from bot.logging_config import LOGGING_CONFIG
@@ -54,6 +54,7 @@ async def main():
 
     dp.update.middleware(DIMiddleware(async_session_factory))
 
+    dp.include_router(admin.router)
     dp.include_router(common.router)
     dp.include_router(profile.router)
     dp.include_router(search.router)
