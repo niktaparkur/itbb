@@ -29,14 +29,12 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
+        need_email=True,
+        send_email_to_provider=True,
     )
 
 
 async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
-    logger.info(user_id)
-    logger.info(payload)
-    logger.info(settings.PAYMENT_PROVIDER_TOKEN)
-    logger.info(bot)
     await bot.send_invoice(
         chat_id=user_id,
         title="Разовая проверка",
@@ -45,6 +43,8 @@ async def send_single_check_invoice(user_id: int, bot: Bot, payload: str):
         provider_token=settings.PAYMENT_PROVIDER_TOKEN,
         currency="RUB",
         prices=[LabeledPrice(label="Разовая проверка", amount=200 * 100)],
+        need_email=True,
+        send_email_to_provider=True
     )
 
 
