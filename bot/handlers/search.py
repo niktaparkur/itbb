@@ -23,6 +23,22 @@ router = Router()
 
 
 async def send_subscription_invoice(user_id: int, bot: Bot):
+    provider_data = {
+        "receipt": {
+            "items": [
+                {
+                    "description": "Подписка на 30 дней",
+                    "quantity": "1.00",
+                    "amount": {"value": "1900.00", "currency": "RUB"},
+                    "vat_code": 1,
+                    "payment_mode": "full_payment",
+                    "payment_subject": "service",
+                }
+            ],
+            "tax_system_code": 1,
+        }
+    }
+
     await bot.send_invoice(
         chat_id=user_id,
         title="Подписка на 30 дней",
@@ -33,6 +49,7 @@ async def send_subscription_invoice(user_id: int, bot: Bot):
         prices=[LabeledPrice(label="Подписка на 30 дней", amount=1900 * 100)],
         need_email=True,
         send_email_to_provider=True,
+        provider_data=json.dumps(provider_data),
     )
 
 
