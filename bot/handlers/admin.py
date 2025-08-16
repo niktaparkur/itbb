@@ -19,7 +19,8 @@ async def cmd_delsub(message: Message, user_service: UserService):
     args = message.text.split()
     if len(args) != 2:
         await message.answer(
-            "❌ Неверный формат. Используйте: <code>/delsub &lt;ID пользователя&gt;</code>"
+            "❌ Неверный формат. Используйте: <code>/delsub &lt;ID пользователя&gt;</code>",
+            parse_mode="HTML",
         )
         return
 
@@ -27,7 +28,8 @@ async def cmd_delsub(message: Message, user_service: UserService):
         user_id_to_revoke = int(args[1])
     except ValueError:
         await message.answer(
-            "❌ ID пользователя должен быть числом. Используйте: <code>/delsub &lt;ID пользователя&gt;</code>"
+            "❌ ID пользователя должен быть числом. Используйте: <code>/delsub &lt;ID пользователя&gt;</code>",
+            parse_mode="HTML",
         )
         return
 
@@ -35,10 +37,12 @@ async def cmd_delsub(message: Message, user_service: UserService):
 
     if was_revoked:
         await message.answer(
-            f"✅ Подписка для пользователя с ID <code>{user_id_to_revoke}</code> успешно отозвана."
+            f"✅ Подписка для пользователя с ID <code>{user_id_to_revoke}</code> успешно отозвана.",
+            parse_mode="HTML",
         )
     else:
         await message.answer(
             f"⚠️ Не удалось отозвать подписку для ID <code>{user_id_to_revoke}</code>. "
-            f"Возможно, у пользователя нет активной подписки или такой ID не найден."
+            f"Возможно, у пользователя нет активной подписки или такой ID не найден.",
+            parse_mode="HTML",
         )
